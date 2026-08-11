@@ -1,55 +1,301 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Prevent browser close tab</title>
-    <link rel="stylesheet" href="/preventclose.css" integrity="sha384-vyKxviQBm7NmJ955xe9u7ADJmvFLRvQil/bTJRKINkmRjNTVklSDxbxsSJ7H//lZ">
-</head>
-<body>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Browser Close Protection</title>
+
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
         body {
-            padding-top: 50px;
-            font-family: Helvetica, Verdana, Arial, sans-serif;
+            margin: 0;
+            min-height: 100%;
         }
 
-        form {
-            display: block;
-            left: 0px;
-            width: 100%;
-            text-align: center;
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #101114;
+            color: #f5f5f5;
         }
 
-        #desc {
-            left: 0px;
-            height: 40px;
+        .container {
             width: 100%;
-            line-height: 40px;
-            font-weight: bold;
-            font-size: 1.5em;
+            max-width: 760px;
+            padding: 40px;
             text-align: center;
+            background: #191b20;
+            border: 1px solid #30343b;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
         }
 
-        #new-note {
-            left: 0px;
-            width: 100%;
-            text-align: center;
+        h1 {
+            margin: 0 0 16px;
+            font-size: clamp(1.6rem, 4vw, 2.4rem);
         }
 
-        #ask-for-support {
-            left: 0px;
-            width: 100%;
-            text-align: center;
+        .description {
+            margin-bottom: 24px;
+            color: #c9cdd4;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0 24px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: #30271a;
+            color: #ffd58a;
+            font-weight: 700;
+        }
+
+        .status.armed {
+            background: #173322;
+            color: #82e6a6;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        button {
+            border: 0;
+            border-radius: 10px;
+            padding: 14px 24px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            background: #ffffff;
+            color: #111111;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .note {
+            margin-top: 24px;
+            color: #9ba2ac;
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
     </style>
+</head>
 
-    <div id="desc">Just leave this tab open, and your browser won't be closed automatically.</div>
-    <p id="new-note"><strong>NOTE: Due to a change in the API of Chrome, you will need to click anywhere on this page once to make this script work. You can click <a href="javascript:void()">here</a> if you want to.</strong></p>
+<body>
+    <main class="container">
+        <h1>Browser Close Protection</h1>
+
+        <div id="status" class="status">
+            <span class="dot"></span>
+            <span id="statusText">Protection waiting for activation</span>
+        </div>
+
+        <p class="description">
+            Keep this tab open. Once protection is activated, the browser will
+            request confirmation before closing, refreshing, or navigating away
+            whenever the browser allows it.
+        </p>
+
+        <button id="activateButton" type="button">
+            Activate Protection
+        </button>
+
+        <p class="note">
+            Modern browsers require at least one real user interaction before
+            allowing a leave-page confirmation dialog.
+        </p>
+    </main>
 
     <script>
-        window.onbeforeunload = function() {
-            return "Would you really like to close your browser?";
-        }
+        (() => {
+            "use strict";
+
+            let protectionArmed = false;
+
+            const status = document.getElementById("status");
+            const statusText = document.getElementById("statusText");
+            const activateButton = document.getElementById("activateButton");
+
+            /*
+             * Modern Chrome / Edge / Firefox ignore custom beforeunload text.
+             * Setting returnValue is still required for broad compatibility.
+             */
+            const protectPage = (event) => {
+                if (!protectionArmed) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.returnValue = "";
+
+                return "";
+            };
+
+            const armProtection = () => {
+                if (protectionArmed) {
+                    return;
+                }
+
+                protectionArmed = true;
+
+                /*
+                 * Use addEventListener instead of window.onbeforeunload so
+                 * another script cannot accidentally replace this handler.
+                 */
+                window.addEventListener("beforeunload", protectPage, {
+                    capture: true
+                });
+
+                status.classList.add("armed");
+                statusText.textContent = "Protection ACTIVE";
+
+                activateButton.textContent = "Protection Active";
+                activateButton.disabled = true;
+
+                console.log("[Close Protection] Armed.");
+            };
+
+            /*
+             * Explicit activation button.
+             */
+            activateButton.addEventListener("click", armProtection, {
+                once: true
+            });
+
+            /*
+             * Also arm on practically any genuine user interaction.
+             *
+             * pointerdown covers mouse, touch and pen.
+             * keydown provides keyboard activation.
+             * touchstart is retained for older/mobile implementations.
+             */
+            const activationEvents = [
+                "pointerdown",
+                "mousedown",
+                "touchstart",
+                "keydown"
+            ];
+
+            const activateFromInteraction = () => {
+                armProtection();
+
+                for (const eventName of activationEvents) {
+                    document.removeEventListener(
+                        eventName,
+                        activateFromInteraction,
+                        true
+                    );
+                }
+            };
+
+            for (const eventName of activationEvents) {
+                document.addEventListener(
+                    eventName,
+                    activateFromInteraction,
+                    {
+                        capture: true,
+                        passive: eventName === "touchstart"
+                    }
+                );
+            }
+
+            /*
+             * Diagnostic only:
+             * pagehide cannot cancel closing, but helps detect when the page
+             * is actually being unloaded/frozen.
+             */
+            window.addEventListener("pagehide", (event) => {
+                console.log(
+                    "[Close Protection] pagehide:",
+                    event.persisted ? "BFCache" : "page leaving"
+                );
+            });
+
+            /*
+             * Keep track of visibility transitions.
+             */
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible" && protectionArmed) {
+                    statusText.textContent = "Protection ACTIVE";
+                }
+            });
+
+            /*
+             * Catch accidental in-page link navigation.
+             *
+             * beforeunload remains the authoritative protection mechanism.
+             */
+            document.addEventListener(
+                "click",
+                (event) => {
+                    if (!protectionArmed) {
+                        return;
+                    }
+
+                    const link = event.target.closest("a[href]");
+
+                    if (!link) {
+                        return;
+                    }
+
+                    const href = link.getAttribute("href");
+
+                    if (
+                        !href ||
+                        href.startsWith("#") ||
+                        href.startsWith("javascript:")
+                    ) {
+                        return;
+                    }
+
+                    /*
+                     * Do not manually confirm here.
+                     * beforeunload will handle actual page navigation.
+                     */
+                },
+                true
+            );
+
+            /*
+             * Intentionally DO NOT try to intercept Ctrl+W / Cmd+W.
+             *
+             * Browsers reserve those shortcuts and JavaScript cannot
+             * reliably cancel them. The beforeunload handler is the
+             * strongest browser-supported protection.
+             */
+        })();
     </script>
-    <script src="/preventclose.js" integrity="sha384-WrrSeAWImvDziYDe8uybH2tyOvfF6q6914A1th0V7CEYCb/VzXSCCxv/bwDxjDiA"></script>
+
+    <!--
+    If /preventclose.js contains additional functionality you still need,
+    you can keep it here.
+
+    IMPORTANT:
+    If the JS file changes, its integrity hash must also be regenerated.
+    -->
+    <!--
+    <script
+        src="/preventclose.js"
+        integrity="sha384-WrrSeAWImvDziYDe8uybH2tyOvfF6q6914A1th0V7CEYCb/VzXSCCxv/bwDxjDiA"
+        crossorigin="anonymous">
+    </script>
+    -->
 </body>
 </html>
